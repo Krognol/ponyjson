@@ -7,7 +7,7 @@ class JSONArray
     new create_with_parser(p: _Parser ref) => _with_parser(p)
 
     fun ref _with_parser(p: _Parser ref) =>
-        p._next_skip_ws() // '['
+        p._get_next() // '['
         while true do
             match p.cur
                 | '{' => _values.push(JSONObject.create_with_parser(p)); p._expect('}', "JSON: Array: expected object delimiter\n")
@@ -55,14 +55,13 @@ class JSONObject
     var _values: Map[String, JSONType] = Map[String, JSONType]()
     new create() => None
     new create_with_parser(p: _Parser ref) => _with_parser(p)
-
     
 
     fun ref _insert_val(key: String, jval: JSONType) =>
         try _values.insert(key, jval)? end
 
     fun ref _with_parser(p: _Parser ref) =>
-        p._next_skip_ws() // '{'
+        p._get_next() // '{'
         while true do
             if p.cur != '"' then
                 p._err("JSON: Object: expected '\"'\n")
@@ -121,7 +120,7 @@ class JSONObject
 class JSON
     fun from_string(str: String): JSONType =>
         let parser = _Parser(str)
-        match parser._next_skip_ws()
+        match parser._get_next()
             | '{' => JSONObject.create_with_parser(parser)
             | '[' => JSONArray.create_with_parser(parser)
             else
@@ -134,12 +133,15 @@ class _Parser
     var _next: U32 = ' '
     let _buf: String
 
-    fun next(): U32 => _next
     fun _is_space(c: U32): Bool => (c == ' ') or ((c >= '\t') and (c <= '\r'))
+
     fun _is_delim(c: U32): Bool => 
         (c == ',') or (c == '}') or (c == ':') or (c == ']') or (_is_space(c)) or (c == 0)
+    
     fun _is_digit(c: U32): Bool => (c >= '0') and (c <= '9')
-
+    
+    fun _err(msg: String) => @printf[I32](msg.cstring())
+    
     new create(src: String) => _buf = src
     
     fun ref _get_next_raw(): U32 =>
@@ -162,19 +164,17 @@ class _Parser
         else
             cur = _next = 0
         end
-
-    fun ref _next_skip_ws(): U32 => _get_next()
+    
 
     fun ref _expect(chr: U32, msg: String): Bool =>
         if cur == chr then
-            _next_skip_ws()
+            _get_next()
             true
         else
             _err(msg)
             false
         end
 
-    fun _err(msg: String) => @printf[I32](msg.cstring())
 
     fun ref _inc_pos(i: ISize = 1) => _pos = _pos.add(i)
 
@@ -200,7 +200,7 @@ class _Parser
             _get_next_raw()
             match cur
                 | 0 => _err("JSON: _parse_string: expected '\"'\n"); return ""
-                | '"' => _next_skip_ws(); break
+                | '"' => _get_next(); break
                 | '\\' => 
                     match _next
                         | '\\' => result.push('\\'); _get_next_raw()
@@ -285,7 +285,7 @@ class _Parser
             end
         end
 
-        if _is_space(cur) then _next_skip_ws() end // skip to the next non-whitespace character
+        if _is_space(cur) then _get_next() end // skip to the next non-whitespace character
         res
 
     fun ref _get_n(): None? =>
@@ -307,7 +307,7 @@ class _Parser
     fun ref _get_nul(): None? =>
         _get_next_raw()
         if cur == 'l' then
-            _next_skip_ws()
+            _get_next()
             None
         else
             error
@@ -332,7 +332,7 @@ class _Parser
     fun ref _get_tru(): Bool? =>
         _get_next_raw()
         if cur == 'e' then
-            _next_skip_ws()
+            _get_next()
             true
         else
             error
@@ -365,7 +365,7 @@ class _Parser
     fun ref _get_fals(): Bool? =>
         _get_next_raw()
         if cur == 'e' then
-            _next_skip_ws()
+            _get_next()
             false
         else
             error
